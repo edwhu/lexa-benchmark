@@ -132,6 +132,7 @@ class SawyerReachPushPickPlaceEnv(SawyerXYZEnv):
 
     def _reset_hand(self):
         super()._reset_hand(10)
+        # import ipdb; ipdb.set_trace()
         rightFinger, leftFinger = self._get_site_pos('rightEndEffector'), self._get_site_pos('leftEndEffector')
         self.init_fingerCOM  =  (rightFinger + leftFinger)/2
         self.pickCompleted = False

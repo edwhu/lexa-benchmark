@@ -6,3 +6,5 @@ MUJOCO_LOG.TXT
 *gifs
 *.mp4
 *.png
+**/__pycache__/**
+*.pyc

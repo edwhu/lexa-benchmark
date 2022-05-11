@@ -23,15 +23,18 @@ class DmcEnv(DmBenchEnv):
     if not self.use_goal_idx:
       self.goal_idx = np.random.randint(len(self.goals))
     self.goal = self.goals[self.goal_idx]
-    self.rendered_goal = False
-    self.rendered_goal_obj = self.render_goal()
-    return super().reset()
+    # self.rendered_goal = False
+    # self.rendered_goal_obj = self.render_goal()
+    # return super().reset()
+    time_step = self._env.reset()
+    obs = dict(time_step.observation)
+    return self._update_obs(obs)
 
   def _update_obs(self, obs):
     obs = super()._update_obs(obs)
-    obs['image_goal'] = self.rendered_goal_obj
+    # obs['image_goal'] = self.rendered_goal_obj
     obs['goal'] = self.goal
-    obs['state'] = self._env.physics.data.qpos
+    obs['qpos'] = self._env.physics.data.qpos
 
     if self.log_per_goal:
       for i, goal in enumerate(self.goals):
@@ -44,8 +47,26 @@ class DmcEnv(DmBenchEnv):
   def render_offscreen(self):
     return self.render()
 
+  # def step(self, action):
+  #   obs, reward, done, info = super().step(action)
+  #   for k, v in obs.items():
+  #     if 'metric_' in k:
+  #       info[k] = v
+  #   reward = self.compute_reward()[0]
+  #   return obs, reward, done, info
+
   def step(self, action):
-    obs, reward, done, info = super().step(action)
+    assert np.isfinite(action).all(), action
+    reward = 0
+    for _ in range(self._action_repeat):
+      time_step = self._env.step(action)
+      reward += time_step.reward or 0
+      if time_step.last():
+       break
+    obs = dict(time_step.observation)
+    done = time_step.last()
+    info = {'discount': np.array(time_step.discount, np.float32)}
+    obs = self._update_obs(obs)
     for k, v in obs.items():
       if 'metric_' in k:
         info[k] = v

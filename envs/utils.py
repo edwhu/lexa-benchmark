@@ -1,3 +1,6 @@
+import re
+import numpy as np
+
 def parse(spec, options):
   """Parses a spec string given a list of options. This can use parametric options, e.g.
   parse(s, ['targetrew(\d*)x']). They can be accessed as e.g. targetrewNx.

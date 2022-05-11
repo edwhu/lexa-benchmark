@@ -1,4 +1,4 @@
-name: lexa
+name: lexa-bench
 channels:
   - anaconda
   - conda-forge
