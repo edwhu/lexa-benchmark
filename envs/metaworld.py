@@ -25,7 +25,7 @@ class MetaWorld(BenchEnv):
         kwargs = dict()
         if self._task_keys['fullstaterew']:
           kwargs['full_state_reward'] = True
-        
+
         with self.LOCK:
           task = translate(task, {'pickbin': 'SawyerBinPickingEnv'})
           if not v2:
@@ -58,8 +58,8 @@ class MetaWorld(BenchEnv):
 
         #self._offscreen = MjRenderContext(self._env.sim, True, get_device_id(), RENDERER)
         self.renderer = DMRenderer(self._env.sim, camera_settings=dict(
-              distance=0.6, lookat=[0, 0.65, 0], azimuth=90, elevation=41+180))
-        
+              distance=1.6, lookat=[0, 0.65, 0], azimuth=90, elevation=41+180))
+
         if self._task_keys['frontview3']:
           self.renderer._camera_settings = dict(
               distance=0.6, lookat=[0, 0.65, 0], azimuth=90, elevation=41+180)
@@ -93,6 +93,8 @@ class MetaWorld(BenchEnv):
         for k, v in obs.items():
           if 'metric_' in k:
             info[k] = v
+        # rename 'state' to 'qpos
+        obs['qpos'] = obs.pop('state')
         return obs, total_reward, done, info
 
     def reset(self):
@@ -103,16 +105,33 @@ class MetaWorld(BenchEnv):
       self.rendered_goal = False
       if not self.use_goal_idx:
         self._env.goal_idx = np.random.randint(len(self._env.goals))
-      return super().reset()
+      obs =  super().reset()
+      # rename 'state' to 'qpos
+      obs['qpos'] = obs.pop('state')
+      return obs
 
+    # def _get_obs(self, state):
+    #   obs = super()._get_obs(state)
+    #   obs['image_goal'] = self.render_goal()
+    #   obs['goal'] = self._env.goals[self._env.goal_idx]
+    #   if self.log_per_goal:
+    #     obs = self._env.add_pertask_success(obs)
+    #   elif self.use_goal_idx:
+    #     obs = self._env.add_pertask_success(obs, self._env.goal_idx)
+    #   return obs
     def _get_obs(self, state):
-      obs = super()._get_obs(state)
-      obs['image_goal'] = self.render_goal()
+      # state only version.
+      # obs = super()._get_obs(state)
+      # obs['image_goal'] = self.render_goal()
+      obs = {'state': state}
       obs['goal'] = self._env.goals[self._env.goal_idx]
       if self.log_per_goal:
         obs = self._env.add_pertask_success(obs)
       elif self.use_goal_idx:
         obs = self._env.add_pertask_success(obs, self._env.goal_idx)
+
+      # Override the object position dimensions to be the goal
+      obs['state'][3:6] = 0
       return obs
 
     def render_goal(self):
@@ -179,14 +198,24 @@ class MetaWorld(BenchEnv):
     def get_goals(self):
       return self._env.goals
 
+    @property
+    def observation_space(self):
+      # state only version
+      shape = (9,)
+      space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=shape, dtype=np.float32)
+      return gym.spaces.Dict({'qpos': space})
+
 def get_sawyer_reach_goals():
-  goal_grid_size = 4
-  obj_pos = [0, 0.6, 0.02]
+  # eef pos seems to be in
+  # -0.01350376  0.41524072  0.31398862
+  goal_grid_size = 2
+  # obj_pos = [0, 0.6, 0.02]
+  obj_pos = [0, 0.0, 0.0]
   x_lims = [-0.2, 0.2] ; y_lims = [0.4, 0.8] ; z = 0.0
   goals = []
   for x in np.linspace(x_lims[0], x_lims[1], goal_grid_size):
     for y in np.linspace(y_lims[0], y_lims[1], goal_grid_size):
       hand_pos = np.array([x,y,z])
-      goals.append(np.concatenate([hand_pos, obj_pos]))
+      goal_pos = np.zeros(3)
+      goals.append(np.concatenate([hand_pos, obj_pos, goal_pos]))
   return goals
-
