@@ -10,7 +10,7 @@ from d4rl.kitchen.adept_envs.simulation.renderer import DMRenderer
 from envs.base_envs import BenchEnv
 
 class RoboBinEnv(BenchEnv):
-  def __init__(self, action_repeat, use_goal_idx=False, log_per_goal=False, 
+  def __init__(self, action_repeat, use_goal_idx=False, log_per_goal=False,
                 image_width=64, metric_rew_cap=100000):
     super().__init__(action_repeat)
 
@@ -124,6 +124,49 @@ class RoboBinEnv(BenchEnv):
       img = self.render_state(s)
       imgs.append(img)
     return np.array(imgs)
+
+class RoboBinStatesEnv(RoboBinEnv):
+  def step(self, action):
+    total_reward = 0.0
+    for step in range(self._action_repeat):
+      state, reward, done, info = self._env.step(action)
+      total_reward += min(reward, self.metric_rew_cap)
+      if done:
+        break
+    obs = self._get_obs(state)
+    for k, v in obs.items():
+      if 'metric_' in k:
+        info[k] = v
+    # rename 'state' to 'qpos
+    obs['qpos'] = obs.pop('state')
+    return obs, total_reward, done, info
+
+  def reset(self):
+    self.rendered_goal = False
+    if self.use_goal_idx:
+      self._env.goal = self.get_goals()[self.get_goal_idx()]
+    obs =  super().reset()
+    # rename 'state' to 'qpos
+    obs['qpos'] = obs.pop('state')
+    return obs
+
+  def _get_obs(self, state):
+    # state only version.
+    obs = {'state': state}
+    obs['goal'] = self._env.goals[self._env.goal_idx]
+    if self.log_per_goal:
+      obs = self._env.add_pertask_success(obs)
+    elif self.use_goal_idx:
+      obs = self._env.add_pertask_success(obs, self._env.goal_idx)
+
+    return obs
+
+  @property
+  def observation_space(self):
+    # state only version
+    shape = (9,)
+    space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=shape, dtype=np.float32)
+    return gym.spaces.Dict({'qpos': space})
 
 def get_robobin_benchmark_goals():
   pos1 = np.array([-0.1, 0.7, 0.04])
