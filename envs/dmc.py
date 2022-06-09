@@ -13,7 +13,7 @@ class DmcEnv(DmBenchEnv):
     self.use_goal_idx = use_goal_idx
     self.log_per_goal = log_per_goal
     self.task_type = name.split('_')[0]
-   
+
     self.goal_idx = 0
     self.goals = get_dmc_benchmark_goals(self.task_type)
     self.rendered_goal = False
@@ -23,18 +23,15 @@ class DmcEnv(DmBenchEnv):
     if not self.use_goal_idx:
       self.goal_idx = np.random.randint(len(self.goals))
     self.goal = self.goals[self.goal_idx]
-    # self.rendered_goal = False
-    # self.rendered_goal_obj = self.render_goal()
-    # return super().reset()
-    time_step = self._env.reset()
-    obs = dict(time_step.observation)
-    return self._update_obs(obs)
+    self.rendered_goal = False
+    self.rendered_goal_obj = self.render_goal()
+    return super().reset()
 
   def _update_obs(self, obs):
     obs = super()._update_obs(obs)
-    # obs['image_goal'] = self.rendered_goal_obj
+    obs['image_goal'] = self.rendered_goal_obj
     obs['goal'] = self.goal
-    obs['qpos'] = self._env.physics.data.qpos
+    obs['state'] = self._env.physics.data.qpos
 
     if self.log_per_goal:
       for i, goal in enumerate(self.goals):
@@ -47,26 +44,8 @@ class DmcEnv(DmBenchEnv):
   def render_offscreen(self):
     return self.render()
 
-  # def step(self, action):
-  #   obs, reward, done, info = super().step(action)
-  #   for k, v in obs.items():
-  #     if 'metric_' in k:
-  #       info[k] = v
-  #   reward = self.compute_reward()[0]
-  #   return obs, reward, done, info
-
   def step(self, action):
-    assert np.isfinite(action).all(), action
-    reward = 0
-    for _ in range(self._action_repeat):
-      time_step = self._env.step(action)
-      reward += time_step.reward or 0
-      if time_step.last():
-       break
-    obs = dict(time_step.observation)
-    done = time_step.last()
-    info = {'discount': np.array(time_step.discount, np.float32)}
-    obs = self._update_obs(obs)
+    obs, reward, done, info = super().step(action)
     for k, v in obs.items():
       if 'metric_' in k:
         info[k] = v
@@ -159,6 +138,58 @@ class DmcEnv(DmBenchEnv):
     return goal_img
 
 
+class DmcStatesEnv(DmcEnv):
+  def reset(self):
+    self._env.reset()
+    if not self.use_goal_idx:
+      self.goal_idx = np.random.randint(len(self.goals))
+    self.goal = self.goals[self.goal_idx]
+    # self.rendered_goal = False
+    # self.rendered_goal_obj = self.render_goal()
+    # return super().reset()
+    time_step = self._env.reset()
+    obs = dict(time_step.observation)
+    return self._update_obs(obs)
+
+  def _update_obs(self, obs):
+    obs = super()._update_obs(obs)
+    # obs['image_goal'] = self.rendered_goal_obj
+    obs['goal'] = self.goal
+    obs['qpos'] = self._env.physics.data.qpos
+
+    if self.log_per_goal:
+      for i, goal in enumerate(self.goals):
+        obs.update(self.compute_reward(i)[1])
+    elif self.use_goal_idx:
+      obs.update(self.compute_reward()[1])
+
+    return obs
+
+  def step(self, action):
+    assert np.isfinite(action).all(), action
+    reward = 0
+    for _ in range(self._action_repeat):
+      time_step = self._env.step(action)
+      reward += time_step.reward or 0
+      if time_step.last():
+       break
+    obs = dict(time_step.observation)
+    done = time_step.last()
+    info = {'discount': np.array(time_step.discount, np.float32)}
+    obs = self._update_obs(obs)
+    for k, v in obs.items():
+      if 'metric_' in k:
+        info[k] = v
+    reward = self.compute_reward()[0]
+    return obs, reward, done, info
+
+  @property
+  def observation_space(self):
+    # state only version
+    shape = (9,)
+    space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=shape, dtype=np.float32)
+    return gym.spaces.Dict({'qpos': space})
+
 def shortest_angle(angle):
   if not angle.shape:
     return shortest_angle(angle[None])[0]
@@ -179,7 +210,7 @@ def get_dmc_benchmark_goals(task_type):
     # pose[3:6] - first leg hip, knee, ankle
     # pose[6:9] - second leg hip, knee, ankle
     # Note: seems like walker can't bend legs backwards
-    
+
     lie_back = [ -1.2 ,  0. ,  -1.57,  0, 0. , 0.0, 0, -0.,  0.0]
     lie_front = [-1.2, -0, 1.57, 0, 0, 0, 0, 0., 0.]
     legs_up = [ -1.24 ,  0. ,  -1.57,  1.57, 0. , 0.0,  1.57, -0.,  0.0]
@@ -187,7 +218,7 @@ def get_dmc_benchmark_goals(task_type):
     kneel = [ -0.5 ,  0. ,  0,  0, -1.57, -0.8,  1.57, -1.57,  0.0]
     side_angle = [ -0.3 ,  0. ,  0.9,  0, 0, -0.7,  1.87, -1.07,  0.0]
     stand_up = [-0.15, 0., 0.34, 0.74, -1.34, -0., 1.1, -0.66, -0.1]
-    
+
     lean_back = [-0.27, 0., -0.45, 0.22, -1.5, 0.86, 0.6, -0.8, -0.4]
     boat = [ -1.04 ,  0. ,  -0.8,  1.6, 0. , 0.0, 1.6, -0.,  0.0]
     bridge = [-1.1, 0., -2.2, -0.3, -1.5, 0., -0.3, -0.8, -0.4]
@@ -197,7 +228,7 @@ def get_dmc_benchmark_goals(task_type):
     arabesque = [-0.34, 0., 1.57, 1.57, 0, 0., 0, -0., 0.]
     # Other ideas: flamingo (hard), warrior (med), upside down boat (med), three legged dog
 
-    goals = np.stack([lie_back, lie_front, legs_up, 
+    goals = np.stack([lie_back, lie_front, legs_up,
                       kneel, side_angle, stand_up, lean_back, boat,
                       bridge, one_feet, head_stand, arabesque])
 
@@ -210,7 +241,7 @@ def get_dmc_benchmark_goals(task_type):
     # pose[15:19] same for the back right leg
     # pose[19:23] same for the back left leg
 
-    
+
     lie_legs_together = get_quadruped_pose([0, 3.14, 0], 0.2, dict(out_up=[0, 1, 2, 3]), [-0.7, 0.7, -0.7, 0.7])
     lie_rotated = get_quadruped_pose([0.8, 3.14, 0], 0.2, dict(out_up=[0, 1, 2, 3]))
     lie_two_legs_up = get_quadruped_pose([0.8, 3.14, 0], 0.2, dict(out_up=[1, 3], down=[0, 2]))
@@ -219,7 +250,7 @@ def get_dmc_benchmark_goals(task_type):
     lie_side_back = get_quadruped_pose([0., 0, 1.57], 0.3, dict(out=[0,1,2, 3]), [-0.7, 0.7, -0.7, 0.7])
     stand = get_quadruped_pose([1.57, 0, 0], 0.2, dict(up=[0, 1, 2, 3]))
     stand_rotated = get_quadruped_pose([0.8, 0, 0], 0.2, dict(up=[0, 1, 2, 3]))
- 
+
     stand_leg_up = get_quadruped_pose([1.57, 0, 0.0], 0.7, dict(down=[0, 2, 3], out_up=[1]))
     attack = get_quadruped_pose([1.57, 0., -0.4], 0.7, dict(out=[0, 1, 2, 3]))
     balance_front = get_quadruped_pose([1.57, 0.0, 1.57], 0.7, dict(up=[0, 1, 2, 3]))
