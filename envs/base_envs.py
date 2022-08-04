@@ -88,7 +88,7 @@ class BenchEnv():
   def observation_space(self):
     shape = self._size + (3,)
     space = gym.spaces.Box(low=0, high=255, shape=shape, dtype=np.uint8)
-    return gym.spaces.Dict({'image': space})
+    return gym.spaces.Dict({'image': space, 'image_goal': space})
 
   @property
   def action_space(self):

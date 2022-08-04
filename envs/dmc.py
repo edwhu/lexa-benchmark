@@ -152,10 +152,9 @@ class DmcStatesEnv(DmcEnv):
     return self._update_obs(obs)
 
   def _update_obs(self, obs):
-    obs = super()._update_obs(obs)
     # obs['image_goal'] = self.rendered_goal_obj
-    obs['goal'] = self.goal
-    obs['qpos'] = self._env.physics.data.qpos
+    obs['goal'] = np.copy(self.goal)
+    obs['qpos'] = np.copy(self._env.physics.data.qpos)
 
     if self.log_per_goal:
       for i, goal in enumerate(self.goals):
@@ -188,7 +187,14 @@ class DmcStatesEnv(DmcEnv):
     # state only version
     shape = (9,)
     space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=shape, dtype=np.float32)
-    return gym.spaces.Dict({'qpos': space})
+    return gym.spaces.Dict({'qpos': space, 'goal': space})
+
+  def _compute_reward(self, goal_idx, pose):
+    # just compute distance in x axis.
+    task_type = self.task_type
+    assert task_type == 'walker'
+    distance = np.abs(self.goals[goal_idx][1] - self._env.physics.data.qpos[1])
+    return -distance, (distance < 0.1).astype(np.float32)
 
 def shortest_angle(angle):
   if not angle.shape:
@@ -228,9 +234,17 @@ def get_dmc_benchmark_goals(task_type):
     arabesque = [-0.34, 0., 1.57, 1.57, 0, 0., 0, -0., 0.]
     # Other ideas: flamingo (hard), warrior (med), upside down boat (med), three legged dog
 
-    goals = np.stack([lie_back, lie_front, legs_up,
-                      kneel, side_angle, stand_up, lean_back, boat,
-                      bridge, one_feet, head_stand, arabesque])
+    x_deltas = [1.0, 2.5, 5.0, 7.5]
+    all_stand_up_goals = []
+    for x_delt in x_deltas:
+      new_stand_up = np.copy(stand_up)
+      new_stand_up[1] = x_delt
+      all_stand_up_goals.append(new_stand_up)
+    goals = np.stack(all_stand_up_goals)
+
+    # goals = np.stack([lie_back, lie_front, legs_up,
+    #                   kneel, side_angle, stand_up, lean_back, boat,
+    #                   bridge, one_feet, head_stand, arabesque])
 
   if task_type == 'quadruped':
     # pose[0,1] is x,y
