@@ -234,7 +234,7 @@ def get_dmc_benchmark_goals(task_type):
     arabesque = [-0.34, 0., 1.57, 1.57, 0, 0., 0, -0., 0.]
     # Other ideas: flamingo (hard), warrior (med), upside down boat (med), three legged dog
 
-    x_deltas = [1.0, 2.5, 5.0, 7.5]
+    x_deltas = [-3.0, 3.0, -5.0,5.0]
     all_stand_up_goals = []
     for x_delt in x_deltas:
       new_stand_up = np.copy(stand_up)
