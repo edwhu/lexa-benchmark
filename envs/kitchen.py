@@ -136,6 +136,75 @@ class KitchenEnv(BenchEnv):
     self.rendered_goal = False
     return self._get_obs(state)
 
+class KitchenStatesEnv(KitchenEnv):
+  def __init__(self, **kwargs):
+    super().__init__(**kwargs)
+    # 0-8 are robot joints
+    # 9, 10 are bottom burner joints
+    # 17, 18 are light switch
+    # 19 is slide cabinet
+    # 20, 21 are hinge cabinet
+    # 22, is microwave
+    # 23-25 are kettle
+    self.obs_idxs = [0,1,2,3,4,5,6,7,8,9,10,17,18,19,20,21,22,23,24,25]
+    joint_ranges = np.copy(self._env.sim.model.jnt_range)
+    self.obs_bounds = []
+    for idx in self.obs_idxs:
+      if 23 <= idx <= 25: # kettle joint is free joint, special case.
+        obs_min = self._env.min_ee_pos
+        obs_max = self._env.max_ee_pos
+        self.obs_bounds.append(np.array([obs_min[idx-23], obs_max[idx-23]]))
+      else:
+        self.obs_bounds.append(joint_ranges[idx])
+    self.obs_bounds = np.stack(self.obs_bounds)
+
+    self.goals = list(range(len(self.obs_element_goals)))
+    self.goal_obs = []
+    self.goal_qpos = [] # used for rendering
+    for idx, val in zip(self.obs_element_indices, self.obs_element_goals):
+      qpos = self.init_qpos.copy()
+      qpos[idx] = val
+      self.goal_qpos.append(qpos)
+      obs = qpos[self.obs_idxs]
+      self.goal_obs.append(obs)
+    self.goal_obs = np.stack(self.goal_obs, 0)
+    self.goal_qpos = np.stack(self.goal_qpos, 0)
+
+  def reset(self):
+    with self.LOCK:
+      state = self._env.reset()
+    if not self.use_goal_idx:
+      self.goal_idx = np.random.randint(len(self.goals))
+    self.goal = self.goals[self.goal_idx]
+    # self.rendered_goal = False
+    return self._get_obs(state)
+
+  def _get_obs(self, state):
+    obs = state[self.obs_idxs]
+    goal_obs = self.goal_obs[self.goal_idx]
+    ob_dict = {'state': obs, 'goal': goal_obs}
+    if self.log_per_goal:
+      for i, goal_idx in enumerate(self.goals):
+        # add rewards for all goals
+        task_rel_success, all_obj_success = self.compute_success(goal_idx)
+        ob_dict['metric_success_task_relevant/goal_'+str(goal_idx)] = task_rel_success
+        ob_dict['metric_success_all_objects/goal_'+str(goal_idx)]   = all_obj_success
+    if self.use_goal_idx:
+      task_rel_success, all_obj_success = self.compute_success(self.goal_idx)
+      ob_dict['metric_success_task_relevant/goal_'+str(self.goal_idx)] = task_rel_success
+      ob_dict['metric_success_all_objects/goal_'+str(self.goal_idx)]   = all_obj_success
+    return ob_dict
+
+  @property
+  def observation_space(self):
+    # state only version
+    shape = (20,)
+    space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=shape, dtype=np.float32)
+    return gym.spaces.Dict({'state': space, 'goal': space})
+
+  def get_goals(self):
+    return self.goal_obs
+
 def get_kitchen_benchmark_goals():
 
     object_goal_vals = {'bottom_burner' :  [-0.88, -0.01],
@@ -152,19 +221,19 @@ def get_kitchen_benchmark_goals():
                     'microwave'    :  [22],
                     'kettle'       :  [23, 24, 25]}
 
-    base_task_names = [ 'bottom_burner', 'light_switch', 'slide_cabinet', 
+    base_task_names = [ 'bottom_burner', 'light_switch', 'slide_cabinet',
                         'hinge_cabinet', 'microwave', 'kettle' ]
 
-    
+
     goal_configs = []
     #single task
     for i in range(6):
       goal_configs.append( [base_task_names[i]])
 
     #two tasks
-    for i,j  in combinations([1,2,3,5], 2) :
-      goal_configs.append( [base_task_names[i], base_task_names[j]] )
-    
+    # for i,j  in combinations([1,2,3,5], 2) :
+    #   goal_configs.append( [base_task_names[i], base_task_names[j]] )
+
     obs_element_goals = [] ; obs_element_indices = []
     for objects in goal_configs:
         _goal = np.concatenate([object_goal_vals[obj] for obj in objects])
@@ -172,5 +241,5 @@ def get_kitchen_benchmark_goals():
 
         obs_element_goals.append(_goal)
         obs_element_indices.append(_goal_idxs)
-  
+
     return obs_element_goals, obs_element_indices, goal_configs

@@ -83,7 +83,7 @@
             </body>
         </body>
         <body name="kettle" pos="-0.269 0.35 1.626">
-            <freejoint/>
+            <freejoint name="kettle_freejoint"/>
             <include file="../../../adept_models/kitchen/assets/kettle_chain.xml"/>
         </body>
 
