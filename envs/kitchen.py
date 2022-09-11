@@ -233,6 +233,7 @@ def get_kitchen_benchmark_goals():
     #two tasks
     # for i,j  in combinations([1,2,3,5], 2) :
     #   goal_configs.append( [base_task_names[i], base_task_names[j]] )
+    goal_configs.append(["slide_cabinet", "light_switch"])
 
     obs_element_goals = [] ; obs_element_indices = []
     for objects in goal_configs:
