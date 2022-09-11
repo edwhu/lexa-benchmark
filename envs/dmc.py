@@ -139,6 +139,11 @@ class DmcEnv(DmBenchEnv):
 
 
 class DmcStatesEnv(DmcEnv):
+  def __init__(self, name, size=(64, 64), action_repeat=2, use_goal_idx=False, log_per_goal=False):
+    super().__init__(name, size, action_repeat, use_goal_idx, log_per_goal)
+    if "humanoid" in name:
+      self.obs_bounds = np.concatenate([np.array([[-10, 10], [-10, 10], [0, 3], [-1, 1], [-1, 1], [-1, 1], [-1, 1]]), self._env.physics.model.jnt_range[1:]], 0)
+
   def reset(self):
     self._env.reset()
     if not self.use_goal_idx:
@@ -184,17 +189,27 @@ class DmcStatesEnv(DmcEnv):
 
   @property
   def observation_space(self):
-    # state only version
-    shape = (9,)
+    if self.task_type == "walker":
+      shape = (9,)
+    elif self.task_type == "humanoid":
+      shape = (28,)
+
     space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=shape, dtype=np.float32)
     return gym.spaces.Dict({'qpos': space, 'goal': space})
 
   def _compute_reward(self, goal_idx, pose):
-    # just compute distance in x axis.
-    task_type = self.task_type
-    assert task_type == 'walker'
-    distance = np.abs(self.goals[goal_idx][1] - self._env.physics.data.qpos[1])
-    return -distance, (distance < 0.1).astype(np.float32)
+    if self.task_type == "walker":
+      # just compute distance in x axis.
+      distance = np.abs(self.goals[goal_idx][1] - self._env.physics.data.qpos[1])
+      return -distance, (distance < 0.1).astype(np.float32)
+    if self.task_type == "humanoid":
+      # just compute distance in x or y axis.
+      if goal_idx < 4:
+        distance = np.abs(self.goals[goal_idx][0] - self._env.physics.data.qpos[0])
+      else:
+        distance = np.abs(self.goals[goal_idx][1] - self._env.physics.data.qpos[1])
+
+      return -distance, (distance < 0.1).astype(np.float32)
 
 def shortest_angle(angle):
   if not angle.shape:
@@ -274,6 +289,30 @@ def get_dmc_benchmark_goals(task_type):
     goals = np.stack([ lie_legs_together, lie_rotated, lie_two_legs_up,
                       lie_side, lie_side_back, stand, stand_rotated,
                       stand_leg_up, attack, balance_front, balance_back,  balance_diag])
+  if task_type == 'humanoid':
+    goal = np.zeros(28)
+    goal[:4] = [0, 0, 1.5, 1]
+
+    goal_1 = np.copy(goal)
+    goal_1[0] = 4.0
+    goal_2 = np.copy(goal)
+    goal_2[0] = -4.0
+
+    goal_3 = np.copy(goal)
+    goal_3[0] = 8.0
+    goal_4 = np.copy(goal)
+    goal_4[0] = -8.0
+
+    goal_5 = np.copy(goal)
+    goal_5[1] = 4.0
+    goal_6 = np.copy(goal)
+    goal_6[1] = -4.0
+
+    goal_7 = np.copy(goal)
+    goal_7[1] = 8.0
+    goal_8 = np.copy(goal)
+    goal_8[1] = -8.0
+    goals = np.stack([goal_1, goal_2, goal_3, goal_4, goal_5, goal_6, goal_7, goal_8])
 
   return goals
 

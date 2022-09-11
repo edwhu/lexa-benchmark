@@ -28,7 +28,7 @@ class DmBenchEnv():
     self._action_repeat = action_repeat
     self._size = size
     if camera is None:
-      camera = dict(quadruped=2).get(domain, 0)
+      camera = dict(quadruped=2, humanoid=1).get(domain, 0)
     self._camera = camera
 
   @property
