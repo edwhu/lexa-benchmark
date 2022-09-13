@@ -176,8 +176,29 @@ class KitchenStatesEnv(KitchenEnv):
     if not self.use_goal_idx:
       self.goal_idx = np.random.randint(len(self.goals))
     self.goal = self.goals[self.goal_idx]
-    # self.rendered_goal = False
+    self.rendered_goal = False
     return self._get_obs(state)
+
+  def render_goal(self):
+    if self.rendered_goal:
+      return self.rendered_goal_obj
+
+    # random.sample(list(obs_element_goals), 1)[0]
+    backup_qpos = self._env.sim.data.qpos.copy()
+    backup_qvel = self._env.sim.data.qvel.copy()
+
+    qpos = self.goal_qpos[self.goal_idx]
+
+    self._env.set_state(qpos, np.zeros(len(self._env.init_qvel)))
+
+    goal_obs = self._env.render('rgb_array', width=self._env.imwidth, height=self._env.imheight)
+
+    self._env.set_state(backup_qpos, backup_qvel)
+
+    self.rendered_goal = True
+    self.rendered_goal_obj = goal_obs
+    return goal_obs
+
 
   def _get_obs(self, state):
     obs = state[self.obs_idxs]
@@ -227,13 +248,19 @@ def get_kitchen_benchmark_goals():
 
     goal_configs = []
     #single task
-    for i in range(6):
-      goal_configs.append( [base_task_names[i]])
+    # for i in range(6):
+    #   goal_configs.append( [base_task_names[i]])
 
+    # so we know microwave and hinge cabinet are hard, so we can remove it.
     #two tasks
-    # for i,j  in combinations([1,2,3,5], 2) :
-    #   goal_configs.append( [base_task_names[i], base_task_names[j]] )
-    goal_configs.append(["slide_cabinet", "light_switch"])
+    for i,j  in combinations([0,1,2,5], 2): # 6 total
+      goal_configs.append( [base_task_names[i], base_task_names[j]] )
+
+    for perm  in combinations([0,1,2,5], 3): # 4 total
+      goal_configs.append([base_task_names[i] for i in perm])
+
+    for perm  in combinations([0,1,2,5], 4): # 1 total
+      goal_configs.append( [base_task_names[i] for i in perm] )
 
     obs_element_goals = [] ; obs_element_indices = []
     for objects in goal_configs:
